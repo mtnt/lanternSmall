@@ -9,10 +9,16 @@
 #define WIDTH 16
 #define HEIGHT 16
 
-void display(const struct rgb (&matrix)[WIDTH][HEIGHT]) {
-    for (const struct rgb (&row)[HEIGHT] : matrix){
-        for (const struct rgb &cell : row) {
-            setPixel(cell);
+void display(const struct rgb (&matrix)[HEIGHT][WIDTH]) {
+    for (short rowIdx = 0; rowIdx < HEIGHT; rowIdx++){
+        if (rowIdx % 2 == 0) {
+            for (short cellIdx = 0; cellIdx < WIDTH; cellIdx++) {
+                setPixel(matrix[rowIdx][cellIdx]);
+            }
+        } else {
+            for (short cellIdx = WIDTH - 1; cellIdx >= 0; cellIdx--) {
+                setPixel(matrix[rowIdx][cellIdx]);
+            }
         }
     }
 
@@ -21,9 +27,9 @@ void display(const struct rgb (&matrix)[WIDTH][HEIGHT]) {
 }
 
 int main() {
-    struct rgb m[WIDTH][HEIGHT];
-    for (byte i = 0; i < WIDTH; i++) {
-        for (byte j = 0; j < HEIGHT; j++) {
+    struct rgb m[HEIGHT][WIDTH];
+    for (byte i = 0; i < HEIGHT; i++) {
+        for (byte j = 0; j < WIDTH; j++) {
             if (i == j) {
                 m[i][j] = {15, 0, 0};
             } else {
