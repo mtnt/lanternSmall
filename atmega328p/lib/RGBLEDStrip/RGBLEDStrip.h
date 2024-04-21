@@ -1,15 +1,9 @@
 #ifndef RGBLEDSTRIP_H
 #define RGBLEDSTRIP_H
 
-#define byte unsigned char
+typedef unsigned char byte;
 
-struct rgb {
-    byte r;
-    byte g;
-    byte b;
-};
-
-void setPixel(const struct rgb &color);
+void setPixel(const rgb &color);
 
 void send(const byte pin);
 

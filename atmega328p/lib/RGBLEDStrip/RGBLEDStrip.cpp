@@ -1,6 +1,8 @@
 #include <avr/io.h>
 #include <util/delay.h>
 
+#include "../color/color.h"
+
 #include "RGBLEDStrip.h"
 
 // @see https://agelectronica.lat/pdfs/textos/L/LDWS2812.PDF
@@ -44,7 +46,7 @@ void bufferByte(const byte intensity) {
     pointer++;
 }
 
-void setPixel(const struct rgb &color) {
+void setPixel(const rgb &color) {
     bufferByte(color.g);
     bufferByte(color.r);
     bufferByte(color.b);
