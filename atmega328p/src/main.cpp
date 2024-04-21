@@ -15,7 +15,7 @@
 #define BUTTON_UP PB1
 #define BUTTON_DOWN PB3
 
-byte scale = 1;
+byte scale = 20;
 
 rgb matrix[HEIGHT][WIDTH];
 
@@ -27,13 +27,15 @@ short columnIdx;
 byte nextIntensity;
 byte height;
 byte ejectionHeight;
+double scaleMultiplier;
 
 byte intensitiesMaxHeightsMap[] = {3, 3, 4, 4, 5, 5, 6, 6, 7, 7, 8, 8, 9};
 byte currentIntensities[] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
 byte currentHeights[] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
 
-void setMaxIntensity() {
+void setScaleDependencies() {
     maxIntensity = ceil((13. / SCALE_MAX) * scale) - 1;
+    scaleMultiplier = scale * (1. / SCALE_MAX);
 }
 
 void incrementScale() {
@@ -42,7 +44,7 @@ void incrementScale() {
     }
 
     scale += 1;
-    setMaxIntensity();
+    setScaleDependencies();
 }
 
 void decrementScale() {
@@ -51,7 +53,7 @@ void decrementScale() {
     }
 
     scale -= 1;
-    setMaxIntensity();
+    setScaleDependencies();
 }
 
 
@@ -142,7 +144,7 @@ byte getRoundIdx(byte idx) {
 }
 
 byte getTotalMaxHeight(byte columnIdx) {
-    return round(intensitiesMaxHeightsMap[currentIntensities[columnIdx]] * (0.7 + scale * (1. / SCALE_MAX)));
+    return round(intensitiesMaxHeightsMap[currentIntensities[columnIdx]] * (0.7 + scaleMultiplier));
 }
 
 struct ejection {
@@ -228,24 +230,23 @@ bool isEjection(byte columnIdx) {
     );
 }
 
+hsv minColor = {
+    .h = 5,// + (rand() % 4) * 0.03,
+    .s = 0.99,
+    .v = 0.1,// + (rand() % 4) * 0.03
+};
+hsv maxColor = {
+    .h = 50,
+    .s = 0.95,
+    .v = 0.4
+};
 double getColorPosition(double min, double max, double multiplier) {
     return min + (max - min) * multiplier;
 }
 rgb getColor(byte rowIdx, byte columnIdx, double shiftFrom = 0.5, double shiftTo = 0.65) {
-    hsv minColor = {
-        .h = 5 + (rand() % 4) * 0.03,
-        .s = 0.99,
-        .v = 0.1 + (rand() % 4) * 0.03
-    };
-    hsv maxColor = {
-        .h = 50,
-        .s = 0.95,
-        .v = 0.4
-    };
-
     double multiplier = (rowIdx + 1.) / getTotalMaxHeight(columnIdx);
 
-    multiplier *= 0.15 + scale * (1. / SCALE_MAX) * 0.85;
+    multiplier *= 0.15 + scaleMultiplier * 0.85;
 
     if (multiplier <= shiftTo) {
         multiplier *= shiftFrom / shiftTo;
@@ -352,7 +353,7 @@ short buttonIdleTime = buttonIdleTimeTick;
 
 byte doFire = 1;
 int main() {
-    setMaxIntensity();
+    setScaleDependencies();
 
     DDRB &= ~(_BV(BUTTON_UP) | _BV(BUTTON_DOWN));
 
