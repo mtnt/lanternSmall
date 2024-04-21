@@ -10,16 +10,17 @@
 #define LED PB0
 #define WIDTH 16
 #define HEIGHT 16
-#define EJECTION_AREA 3
-#define SCALE_MIN 1
 #define SCALE_MAX 20
 
-byte scale = 5;
+#define BUTTON_UP PB1
+#define BUTTON_DOWN PB3
+
+byte scale = 1;
 
 rgb matrix[HEIGHT][WIDTH];
 
 byte minIntensity = 0;
-byte maxIntensity = ceil((13. / SCALE_MAX) * scale) - 1;;
+byte maxIntensity;
 
 byte rowIdx;
 short columnIdx;
@@ -30,6 +31,60 @@ byte ejectionHeight;
 byte intensitiesMaxHeightsMap[] = {3, 3, 4, 4, 5, 5, 6, 6, 7, 7, 8, 8, 9};
 byte currentIntensities[] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
 byte currentHeights[] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
+
+void setMaxIntensity() {
+    maxIntensity = ceil((13. / SCALE_MAX) * scale) - 1;
+}
+
+void incrementScale() {
+    if (scale == SCALE_MAX) {
+        return;
+    }
+
+    scale += 1;
+    setMaxIntensity();
+}
+
+void decrementScale() {
+    if (scale == 1) {
+        return;
+    }
+
+    scale -= 1;
+    setMaxIntensity();
+}
+
+
+void display(const rgb (&matrix)[HEIGHT][WIDTH]) {
+    for (rowIdx = 0; rowIdx < HEIGHT; rowIdx++){
+        if (rowIdx % 2 == 0) {
+            for (columnIdx = 0; columnIdx < WIDTH; columnIdx++) {
+                setPixel(matrix[rowIdx][columnIdx]);
+            }
+        } else {
+            for (columnIdx = WIDTH - 1; columnIdx >= 0; columnIdx--) {
+                setPixel(matrix[rowIdx][columnIdx]);
+            }
+        }
+    }
+
+    DDRB |= _BV(LED);
+    send(LED);
+}
+
+void shoutDownFire() {
+    for (rowIdx = 0; rowIdx < HEIGHT; rowIdx++) {
+        for (columnIdx = 0; columnIdx < WIDTH; columnIdx++) {
+            matrix[rowIdx][columnIdx] = {0, 0, 0};
+        }
+    }
+
+    for (columnIdx = 0; columnIdx < WIDTH; columnIdx++) {
+        currentHeights[columnIdx] = 0;
+    }
+
+    display(matrix);
+}
 
 short min(short a, short b) {
     return a < b ? a : b;
@@ -205,23 +260,6 @@ rgb getColor(byte rowIdx, byte columnIdx, double shiftFrom = 0.5, double shiftTo
     });
 }
 
-void display(const rgb (&matrix)[HEIGHT][WIDTH]) {
-    for (rowIdx = 0; rowIdx < HEIGHT; rowIdx++){
-        if (rowIdx % 2 == 0) {
-            for (columnIdx = 0; columnIdx < WIDTH; columnIdx++) {
-                setPixel(matrix[rowIdx][columnIdx]);
-            }
-        } else {
-            for (columnIdx = WIDTH - 1; columnIdx >= 0; columnIdx--) {
-                setPixel(matrix[rowIdx][columnIdx]);
-            }
-        }
-    }
-
-    DDRB |= _BV(LED);
-    send(LED);
-}
-
 void fire() {
     if (ejection0.idx > -1 && currentHeights[ejection0.idx] == ejection0.maxHeight) {
         ejection0.idx = -1;
@@ -298,106 +336,67 @@ void fire() {
     }
 
     display(matrix);
-
-    _delay_ms(20);
-
-    fire();
 }
 
+byte to = 20;
+short buttonUpPressedTime = 0;
+short buttonDownPressedTime = 0;
+short buttonPressTO = to * 10;
+short buttonPressTick = to * 5;
+short buttonPressTimeMax = buttonPressTO + buttonPressTick * SCALE_MAX;
+
+short buttonOffPressTime = to * 5;
+short buttonIdleTimeTick = to * 50;
+short buttonIdleTime = buttonIdleTimeTick;
+
+
+byte doFire = 1;
 int main() {
-    fire();
+    setMaxIntensity();
 
-//    rgb m[HEIGHT][WIDTH];
-//    hsv color0 = {
-//        .h = 5,
-//        .s = 0.99,
-//        .v = 0.1
-//    };
-//    hsv color1 = {
-//            .h = 50,
-//            .s = 0.95,
-//            .v = 0.4
-//    };
-//    hsv color = {
-//            .h = 47.5,
-//            .s = 0.97,
-//            .v = 0.25
-//    };
-//
-//    rgb c = hsv2rgb(color);
-//
-//    for (int i = 0; i <= 7; i++) {
-//        if (c.r & _BV(i)) {
-//            m[0][7 - i] = { .r = 10, .g =0, .b = 0};
-//        } else {
-//            m[0][7 - i] = { .r = 0, .g = 0, .b = 0};
-//        }
-//    }
-//    for (int i = 0; i <= 7; i++) {
-//        if (c.g & _BV(i)) {
-//            m[1][7 - i] = { .r = 10, .g = 0, .b = 0};
-//        } else {
-//            m[1][7 - i] = { .r = 0, .g = 0, .b = 0};
-//        }
-//    }
-//    for (int i = 0; i <= 7; i++) {
-//        if (c.b & _BV(i)) {
-//            m[2][7 - i] = { .r = 10, .g = 0, .b = 0};
-//        } else {
-//            m[2][7 - i] = { .r = 0, .g = 0, .b = 0};
-//        }
-//    }
+    DDRB &= ~(_BV(BUTTON_UP) | _BV(BUTTON_DOWN));
 
-//    for (int i = 0; i < 16; i++) {
-//        for (int j = 0; j < 16; j++) {
-//            m[i][j] = hsv2rgb({
-//                .h = getColorPosition(color0.h, color1.h, i * 100. / 16, false),
-//                .s = getColorPosition(color0.s, color1.s, i * 100. / 16, false),
-//                .v = getColorPosition(color0.v, color1.v, i * 100. / 16, false)
-//            });
-//        }
-//    }
-//
-//    display(m);
-//    _delay_ms(1000000);
+    while (true) {
+        if (doFire == 1) {
+            fire();
+        }
 
+        if (buttonIdleTime < buttonIdleTimeTick) {
+            buttonIdleTime = min(buttonIdleTime + to, buttonIdleTimeTick);
+        }
 
+        if (buttonIdleTime >= buttonIdleTimeTick) {
+            if (PINB & _BV(BUTTON_UP)) {
+                buttonUpPressedTime = min(buttonUpPressedTime + to, buttonPressTimeMax);
+            } else {
+                buttonUpPressedTime = 0;
+            }
 
+            if (PINB & _BV(BUTTON_DOWN)) {
+                buttonDownPressedTime = min(buttonDownPressedTime + to, buttonPressTimeMax);
+            } else {
+                buttonDownPressedTime = 0;
+            }
 
+            if (buttonUpPressedTime > 0 && buttonDownPressedTime > 0) {
+                if (buttonUpPressedTime >= buttonOffPressTime && buttonDownPressedTime >= buttonOffPressTime) {
+                    shoutDownFire();
 
+                    doFire = 0;
 
-//    rgb m[HEIGHT][WIDTH];
-//    for (byte i = 0; i < HEIGHT; i++) {
-//        for (byte j = 0; j < WIDTH; j++) {
-//            if (i == j) {
-//                m[i][j] = {15, 0, 0};
-//            } else {
-//                m[i][j] = {0, 0, 0};
-//            }
-//        }
-//    }
-//
-//    display(m);
-//    int c = 0;
-//
-//    while (true) {
-//        short d = getMinRoundDistance(5, 10);
-//
-//        for (short idx = 0; idx < 16; idx++) {
-//            if (idx <= d) {
-//                matrix[0][idx] = {r: 10, g: 0, b: 0};
-//            } else {
-//                matrix[0][idx] = {r: 0, g: 0, b: 0};
-//            }
-//        }
-////        if (rand() % 2) {
-////            matrix[0][0] = {r: 10, g: 0, b: 0};
-////        } else {
-////            matrix[0][0] = {r: 0, g: 0, b: 0};
-////        }
-//
-//
-//        display(matrix);
-//
-//    }
+                    buttonIdleTime = 0;
+                }
+            } else if (buttonUpPressedTime > 0 || buttonDownPressedTime > 0) {
+                doFire = 1;
+
+                if (buttonUpPressedTime == to || (buttonUpPressedTime >= buttonPressTO && buttonUpPressedTime % buttonPressTick == 0)) {
+                    incrementScale();
+                } else if (buttonDownPressedTime == to || (buttonDownPressedTime >= buttonPressTO && buttonDownPressedTime % buttonPressTick == 0)) {
+                    decrementScale();
+                }
+            }
+        }
+
+        _delay_ms(to);
+    }
 }
