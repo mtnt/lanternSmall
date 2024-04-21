@@ -15,7 +15,7 @@
 #define BUTTON_UP PB1
 #define BUTTON_DOWN PB3
 
-byte scale = 20;
+byte scale = 1;
 
 rgb matrix[HEIGHT][WIDTH];
 
@@ -261,6 +261,10 @@ rgb getColor(byte rowIdx, byte columnIdx, double shiftFrom = 0.5, double shiftTo
     });
 }
 
+bool doFire = true;
+short firePeriod = 100;
+double currentFireTime = firePeriod;
+
 void fire() {
     if (ejection0.idx > -1 && currentHeights[ejection0.idx] == ejection0.maxHeight) {
         ejection0.idx = -1;
@@ -339,65 +343,100 @@ void fire() {
     display(matrix);
 }
 
-byte to = 20;
-short buttonUpPressedTime = 0;
-short buttonDownPressedTime = 0;
-short buttonPressTO = to * 10;
-short buttonPressTick = to * 5;
-short buttonPressTimeMax = buttonPressTO + buttonPressTick * SCALE_MAX;
+double buttonIdleTime = 0;
+double buttonIdleTimeRequired = 1500;
 
-short buttonOffPressTime = to * 5;
-short buttonIdleTimeTick = to * 50;
-short buttonIdleTime = buttonIdleTimeTick;
+byte buttonOffPressTime = 100;
 
+double buttonUpPressedTime = 0;
+double buttonDownPressedTime = 0;
 
-byte doFire = 1;
+short buttonLongPressTO = 400;
+short buttonLongPressTick = 200;
+double lastLongPressTickTime = 0;
+
+short buttonPressTimeMax = buttonLongPressTO + buttonLongPressTick * SCALE_MAX;
+void handleButtons(double lastStepDuration) {
+    buttonIdleTime = (buttonIdleTime + lastStepDuration) < buttonIdleTimeRequired ? (buttonIdleTime + lastStepDuration) : buttonIdleTimeRequired;
+
+    if (buttonIdleTime < buttonIdleTimeRequired) {
+        return;
+    }
+
+    if (PINB & _BV(BUTTON_UP)) {
+        buttonUpPressedTime = (buttonUpPressedTime + lastStepDuration) < buttonPressTimeMax ? (buttonUpPressedTime + lastStepDuration) : buttonPressTimeMax;
+    } else if (buttonUpPressedTime > 0) {
+        buttonUpPressedTime = 0;
+        lastLongPressTickTime = 0;
+    }
+
+    if (PINB & _BV(BUTTON_DOWN)) {
+        buttonDownPressedTime = (buttonDownPressedTime + lastStepDuration) < buttonPressTimeMax ? (buttonDownPressedTime + lastStepDuration) : buttonPressTimeMax;
+    } else if (buttonDownPressedTime > 0) {
+        buttonDownPressedTime = 0;
+        lastLongPressTickTime = 0;
+    }
+
+    if (buttonUpPressedTime > 0 && buttonDownPressedTime > 0) {
+        if (buttonUpPressedTime >= buttonOffPressTime && buttonDownPressedTime >= buttonOffPressTime) {
+            doFire = false;
+            shoutDownFire();
+
+            currentFireTime = 0;
+
+            buttonIdleTime = 0;
+            buttonUpPressedTime = 0;
+            buttonDownPressedTime = 0;
+            lastLongPressTickTime = 0;
+        }
+    } else if (buttonUpPressedTime > 0 || buttonDownPressedTime > 0) {
+        doFire = true;
+
+        if (buttonUpPressedTime > 0) {
+            if (buttonUpPressedTime == lastStepDuration) {
+                incrementScale();
+            } else if (buttonUpPressedTime >= buttonLongPressTO && buttonUpPressedTime - lastLongPressTickTime >= buttonLongPressTick) {
+                incrementScale();
+                lastLongPressTickTime = buttonUpPressedTime;
+            }
+        } else {
+            if (buttonDownPressedTime == lastStepDuration) {
+                decrementScale();
+            } else if (buttonDownPressedTime >= buttonLongPressTO && buttonDownPressedTime - lastLongPressTickTime >= buttonLongPressTick) {
+                decrementScale();
+                lastLongPressTickTime = buttonDownPressedTime;
+            }
+        }
+    }
+}
+
+double tickDuration = 0.0316; //ms
+unsigned short currentTime = 0;
+unsigned short lastTime = 0;
+double lastStepDuration = 0;
 int main() {
+    TCCR1B |= _BV(CS12);
+
     setScaleDependencies();
 
     DDRB &= ~(_BV(BUTTON_UP) | _BV(BUTTON_DOWN));
 
     while (true) {
-        if (doFire == 1) {
-            fire();
-        }
+        currentTime = TCNT1;
+        lastStepDuration = (lastTime < currentTime ? (currentTime - lastTime) : (currentTime + 65536. - lastTime)) * tickDuration;
 
-        if (buttonIdleTime < buttonIdleTimeTick) {
-            buttonIdleTime = min(buttonIdleTime + to, buttonIdleTimeTick);
-        }
+        if (doFire) {
+            currentFireTime += lastStepDuration;
 
-        if (buttonIdleTime >= buttonIdleTimeTick) {
-            if (PINB & _BV(BUTTON_UP)) {
-                buttonUpPressedTime = min(buttonUpPressedTime + to, buttonPressTimeMax);
-            } else {
-                buttonUpPressedTime = 0;
-            }
+            if (currentFireTime >= firePeriod) {
+                currentFireTime = 0;
 
-            if (PINB & _BV(BUTTON_DOWN)) {
-                buttonDownPressedTime = min(buttonDownPressedTime + to, buttonPressTimeMax);
-            } else {
-                buttonDownPressedTime = 0;
-            }
-
-            if (buttonUpPressedTime > 0 && buttonDownPressedTime > 0) {
-                if (buttonUpPressedTime >= buttonOffPressTime && buttonDownPressedTime >= buttonOffPressTime) {
-                    shoutDownFire();
-
-                    doFire = 0;
-
-                    buttonIdleTime = 0;
-                }
-            } else if (buttonUpPressedTime > 0 || buttonDownPressedTime > 0) {
-                doFire = 1;
-
-                if (buttonUpPressedTime == to || (buttonUpPressedTime >= buttonPressTO && buttonUpPressedTime % buttonPressTick == 0)) {
-                    incrementScale();
-                } else if (buttonDownPressedTime == to || (buttonDownPressedTime >= buttonPressTO && buttonDownPressedTime % buttonPressTick == 0)) {
-                    decrementScale();
-                }
+                fire();
             }
         }
 
-        _delay_ms(to);
+        handleButtons(lastStepDuration);
+
+        lastTime = currentTime;
     }
 }
